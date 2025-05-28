@@ -275,6 +275,7 @@ public class ShulkerListener implements Listener {
         } catch (Exception e) {
             ShulkerPacksContinued.openshulkers.remove(player);
             player.closeInventory();
+            Bukkit.getLogger().warning("Failed to save shulker for " + player.getName() + ": " + e.getMessage());
             return false;
         }
     }

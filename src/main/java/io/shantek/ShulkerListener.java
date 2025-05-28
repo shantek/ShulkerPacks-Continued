@@ -165,22 +165,33 @@ public class ShulkerListener implements Listener {
     @EventHandler
     public void onBlockBreak(BlockBreakEvent event) {
         Block block = event.getBlock();
-        Player player = event.getPlayer();
 
-        if (!(block.getState() instanceof Container)) return;
+        // Only care about containers
+        if (!(block.getState() instanceof Container container)) return;
 
-        Location loc = block.getLocation();
+        Location loc = container.getLocation();
+
+        // Normalize to left side if it's a double chest
+        if (container instanceof DoubleChest) {
+            DoubleChest doubleChest = (DoubleChest) container;
+            InventoryHolder left = doubleChest.getLeftSide();
+            if (left instanceof Container) {
+                loc = ((Container) left).getLocation();
+            }
+        }
+
         String prefix = loc.getWorld().getName() + ":" + loc.getBlockX() + ":" + loc.getBlockY() + ":" + loc.getBlockZ();
 
-        // Check if any locked key begins with this location prefix
-        for (String key : lockedKeys.values()) {
-            if (key.startsWith(prefix)) {
+        // Check for any locked key that matches this location
+        for (String locked : lockedKeys.values()) {
+            if (locked.startsWith(prefix)) {
                 event.setCancelled(true);
-                player.sendMessage(ChatColor.RED + "This container has a shulker box currently being edited.");
+                event.getPlayer().sendMessage(ChatColor.RED + "This container contains an open shulker and cannot be broken.");
                 return;
             }
         }
     }
+
 
 
     @EventHandler

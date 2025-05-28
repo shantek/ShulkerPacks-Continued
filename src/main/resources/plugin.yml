@@ -1,6 +1,6 @@
-name: ShulkerPacks
+name: ShulkerPacksContinued
 version: 1.6.4
-main: me.darkolythe.shulkerpacks.ShulkerPacks
+main: io.shantek.ShulkerPacksContinued
 api-version: 1.13
 
 commands:

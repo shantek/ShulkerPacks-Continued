@@ -1,11 +1,11 @@
-package me.darkolythe.shulkerpacks;
+package io.shantek;
 
 import org.bukkit.ChatColor;
 import org.bukkit.configuration.file.FileConfiguration;
 
 public class ConfigHandler {
 
-    static void loadConfig(ShulkerPacks main) {
+    static void loadConfig(ShulkerPacksContinued main) {
         main.reloadConfig();
         FileConfiguration config = main.getConfig();
 

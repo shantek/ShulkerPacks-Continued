@@ -1,4 +1,4 @@
-package me.darkolythe.shulkerpacks;
+package io.shantek;
 
 import org.bstats.bukkit.Metrics;
 import org.bukkit.ChatColor;
@@ -10,11 +10,11 @@ import org.bukkit.plugin.java.JavaPlugin;
 import java.util.*;
 import java.util.logging.Level;
 
-public final class ShulkerPacks extends JavaPlugin {
+public final class ShulkerPacksContinued extends JavaPlugin {
 
     ShulkerListener shulkerlistener;
 
-    private static ShulkerPacks plugin;
+    private static ShulkerPacksContinued plugin;
 
     String prefix = ChatColor.WHITE.toString() + ChatColor.BOLD.toString() + "[" + ChatColor.BLUE.toString() + "ShulkerPacks" + ChatColor.WHITE.toString() + ChatColor.BOLD.toString() + "] ";
 
@@ -67,7 +67,7 @@ public final class ShulkerPacks extends JavaPlugin {
     }
 
 
-    public static ShulkerPacks getInstance() {
+    public static ShulkerPacksContinued getInstance() {
         return plugin;
     }
 

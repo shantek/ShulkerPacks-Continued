@@ -1,4 +1,4 @@
-package me.darkolythe.shulkerpacks;
+package io.shantek;
 
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;

@@ -1,4 +1,4 @@
-package me.darkolythe.shulkerpacks;
+package io.shantek;
 
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -6,7 +6,7 @@ import org.bukkit.command.CommandSender;
 
 public class CommandReload implements CommandExecutor {
 
-    private ShulkerPacks main = ShulkerPacks.getInstance();
+    private ShulkerPacksContinued main = ShulkerPacksContinued.getInstance();
 
     @Override
     public boolean onCommand(CommandSender sender, Command cmd, String commandlabel, String[] args) {

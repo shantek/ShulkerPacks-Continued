@@ -138,6 +138,7 @@ public class ShulkerListener implements Listener {
                 }
             }
 
+            // If shift-click opening is disabled or the user is shift-clicking, allow interaction
             if (!main.shiftclicktoopen || event.isShiftClick()) {
                 boolean wasCancelled = event.isCancelled();
                 event.setCancelled(true);

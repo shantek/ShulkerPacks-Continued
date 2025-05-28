@@ -1,11 +1,14 @@
 package io.shantek;
 
 import org.bukkit.*;
+import org.bukkit.block.Block;
 import org.bukkit.block.Container;
+import org.bukkit.block.DoubleChest;
 import org.bukkit.block.ShulkerBox;
 import org.bukkit.entity.Player;
 import org.bukkit.event.*;
 import org.bukkit.event.block.Action;
+import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.inventory.*;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.*;
@@ -160,6 +163,27 @@ public class ShulkerListener implements Listener {
     }
 
     @EventHandler
+    public void onBlockBreak(BlockBreakEvent event) {
+        Block block = event.getBlock();
+        Player player = event.getPlayer();
+
+        if (!(block.getState() instanceof Container)) return;
+
+        Location loc = block.getLocation();
+        String prefix = loc.getWorld().getName() + ":" + loc.getBlockX() + ":" + loc.getBlockY() + ":" + loc.getBlockZ();
+
+        // Check if any locked key begins with this location prefix
+        for (String key : lockedKeys.values()) {
+            if (key.startsWith(prefix)) {
+                event.setCancelled(true);
+                player.sendMessage(ChatColor.RED + "This container has a shulker box currently being edited.");
+                return;
+            }
+        }
+    }
+
+
+    @EventHandler
     public void onInventoryClose(InventoryCloseEvent event) {
         Player player = (Player) event.getPlayer();
 
@@ -214,8 +238,19 @@ public class ShulkerListener implements Listener {
 
     private String generateSessionKey(Container container, int slot) {
         Location loc = container.getLocation();
+
+        // Normalize for double chests
+        if (container instanceof DoubleChest) {
+            DoubleChest doubleChest = (DoubleChest) container;
+            InventoryHolder left = doubleChest.getLeftSide();
+            if (left instanceof Container) {
+                loc = ((Container) left).getLocation(); // Always use the left side for locking
+            }
+        }
+
         return loc.getWorld().getName() + ":" + loc.getBlockX() + ":" + loc.getBlockY() + ":" + loc.getBlockZ() + ":" + slot;
     }
+
 
     private int getExactSlot(ItemStack target, Inventory inventory) {
         for (int i = 0; i < inventory.getSize(); i++) {

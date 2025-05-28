@@ -1,7 +1,7 @@
 # ShulkerPacks
 open shulker boxes without placing them down
 
-![Image of Title](https://i.imgur.com/m1Y8zsr.png)
+
 
 ### Description:
 Tired of having to put down your shulker to open it? Or maybe youre in claimed land? Now you can right click the shulker in your inventory to open it, or just right click the air with it in your main hand!
@@ -9,7 +9,7 @@ Tired of having to put down your shulker to open it? Or maybe youre in claimed l
 This also works in chests (GUIs can be blacklisted with their inventory name in the config)
 
 ### Permissions:
-shulkerpacks.use (lets the player use shulker packs)
+shantek.shulkerpacks.use (lets the player use shulker packs)
 
 ### Config:
 ```

@@ -10,15 +10,15 @@ commands:
     permission: op
 
 permissions:
-  shulkerpacks.use:
+  shantek.shulkerpacks.use:
     description: gives player permission to open shulker boxes in their inventory
     default: op
-  shulkerpacks.open_in_air:
-    description: allows the player to open the shulkerbox in the air (if config enables it) if the player has "shulkerpacks.use"
+  shantek.shulkerpacks.air:
+    description: allows the player to open the shulkerbox in the air (if config enables it) if the player has "shantek.shulkerpacks.use"
     default: true
-  shulkerpacks.open_in_inventory:
-    description: allows the player to open the shulkerbox in their inventory (if config enables it) if the player has "shulkerpacks.use"
+  shantek.shulkerpacks.inventory:
+    description: allows the player to open the shulkerbox in their inventory (if config enables it) if the player has "shantek.shulkerpacks.use"
     default: true
-  shulkerpacks.open_in_chests:
-    description: allows the player to open the shulkerbox in a chest (if config enables it) if the player has "shulkerpacks.use"
+  shantek.shulkerpacks.chests:
+    description: allows the player to open the shulkerbox in a chest (if config enables it) if the player has "shantek.shulkerpacks.use"
     default: true

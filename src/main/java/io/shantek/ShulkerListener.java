@@ -97,7 +97,7 @@ public class ShulkerListener implements Listener {
 
             // prevent the player from opening it in a chest if they have no permission
             if (event.getClickedInventory() != null && (event.getClickedInventory().getType() == InventoryType.CHEST)) {
-                if (!main.canopeninchests || (main.canopeninchests && !player.hasPermission("shulkerpacks.open_in_chests"))) {
+                if (!main.canopeninchests || (main.canopeninchests && !player.hasPermission("shantek.shulkerpacks.chests"))) {
                     return;
                 }
             }
@@ -117,7 +117,7 @@ public class ShulkerListener implements Listener {
 
             // prevent the player from opening it in the inventory if they have no permission
             if ((player.getInventory() == event.getClickedInventory())) {
-                if (!main.canopenininventory || !player.hasPermission("shulkerpacks.open_in_inventory")) {
+                if (!main.canopenininventory || !player.hasPermission("shantek.shulkerpacks.inventory")) {
             	    return;
                 }
             }
@@ -213,7 +213,7 @@ public class ShulkerListener implements Listener {
         if (main.canopeninair && (event.getClickedBlock() == null || event.getClickedBlock().getType() == Material.AIR)) {
             if ((!main.shiftclicktoopen || player.isSneaking())) {
                 if (event.getAction() == Action.RIGHT_CLICK_AIR) {
-                     if (main.canopeninair && player.hasPermission("shulkerpacks.open_in_air")) {
+                     if (main.canopeninair && player.hasPermission("shantek.shulkerpacks.air")) {
                          ItemStack item = event.getItem();
                          openInventoryIfShulker(item, event.getPlayer());
                          main.fromhand.put(player, true);
@@ -293,7 +293,7 @@ public class ShulkerListener implements Listener {
     Opens the shulker inventory with the contents of the shulker
      */
     public boolean openInventoryIfShulker(ItemStack item, Player player) {
-        if (player.hasPermission("shulkerpacks.use")) {
+        if (player.hasPermission("shantek.shulkerpacks.use")) {
             if (item != null) {
                 if (item.getAmount() == 1 && item.getType().toString().contains("SHULKER")) {
 

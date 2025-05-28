@@ -1,9 +1,6 @@
 package io.shantek;
 
-import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
-import org.bukkit.Material;
-import org.bukkit.Sound;
+import org.bukkit.*;
 import org.bukkit.block.ShulkerBox;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -343,15 +340,22 @@ public class ShulkerListener implements Listener {
             @Override
             public void run() {
                 for (Player p : ShulkerPacksContinued.openshulkers.keySet()) {
-                    if (ShulkerPacksContinued.openshulkers.get(p).getType() == Material.AIR) {
+                    ItemStack openShulker = ShulkerPacksContinued.openshulkers.get(p);
+
+                    // If the open shulker is now air, close the GUI
+                    if (openShulker.getType() == Material.AIR) {
                         p.closeInventory();
+                        continue;
                     }
+
+                    // If player is too far from their original container, close the GUI
                     if (main.opencontainer.containsKey(p)) {
-                        if (main.opencontainer.get(p).getLocation() != null) {
-                            if (main.opencontainer.get(p).getLocation() != null && main.opencontainer.get(p).getLocation().getWorld() == p.getWorld()) {
-                                if (main.opencontainer.get(p).getLocation().distance(p.getLocation()) > 6) {
-                                    p.closeInventory();
-                                }
+                        Inventory container = main.opencontainer.get(p);
+                        if (container != null && container.getLocation() != null) {
+                            Location containerLoc = container.getLocation();
+                            if (containerLoc.getWorld() == p.getWorld() &&
+                                    containerLoc.distance(p.getLocation()) > 6) {
+                                p.closeInventory();
                             }
                         }
                     }

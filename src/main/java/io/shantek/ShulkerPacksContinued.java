@@ -47,9 +47,8 @@ public final class ShulkerPacksContinued extends JavaPlugin {
         ConfigHandler.loadConfig(this);
 
         @SuppressWarnings("unused")
-		Metrics metrics = new Metrics(this);
-
-        shulkerlistener.checkIfValid();
+        int pluginId = 26009;
+		Metrics metrics = new Metrics(this, pluginId);
 
         getLogger().log(Level.INFO, (prefix + ChatColor.GREEN + "ShulkerPacks has been enabled!"));
     }

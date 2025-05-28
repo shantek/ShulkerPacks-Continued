@@ -1,386 +1,225 @@
 package io.shantek;
 
 import org.bukkit.*;
+import org.bukkit.block.Container;
 import org.bukkit.block.ShulkerBox;
 import org.bukkit.entity.Player;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.Listener;
+import org.bukkit.event.*;
 import org.bukkit.event.block.Action;
-import org.bukkit.event.block.BlockPlaceEvent;
-import org.bukkit.event.entity.EntityDamageByEntityEvent;
-import org.bukkit.event.entity.ProjectileHitEvent;
 import org.bukkit.event.inventory.*;
 import org.bukkit.event.player.PlayerInteractEvent;
-import org.bukkit.inventory.Inventory;
-import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.*;
 import org.bukkit.inventory.meta.BlockStateMeta;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 public class ShulkerListener implements Listener {
 
-    public ShulkerPacksContinued main;
+    private final ShulkerPacksContinued plugin;
+    private final Map<Player, ItemStack> soloSessions = new HashMap<>();
+    private final Map<Player, String> lockedKeys = new HashMap<>(); // containerKey per player
+
     public ShulkerListener(ShulkerPacksContinued plugin) {
-        this.main = plugin; //set it equal to an instance of main
+        this.plugin = plugin;
     }
 
-    /*
-    Saves the shulker on inventory drag if its open
-     */
     @EventHandler
-    public void onInventoryDrag(InventoryDragEvent event) {
-        if (event.getWhoClicked() instanceof Player player && ShulkerPacksContinued.openshulkers.containsKey(player)) {
-            // Prevent saving to an item that no longer exists in inventory
-            if (!isShulkerStillValid(player)) {
-                event.setCancelled(true);
-                player.closeInventory();
-                player.sendMessage(ChatColor.RED + "Shulker was moved or taken. Changes not allowed.");
-                return;
-            }
-        }
+    public void onRightClick(PlayerInteractEvent event) {
+        Player player = event.getPlayer();
+        if (!player.hasPermission("shantek.shulkerpacks.use")) return;
 
-        // Delay save to next tick
-        Bukkit.getServer().getScheduler().scheduleSyncDelayedTask(main, () ->
-                saveShulker((Player) event.getWhoClicked(), event.getView().getTitle()), 1);
-    }
+        ItemStack item = event.getItem();
+        if (item == null || item.getAmount() > 1 || !item.getType().toString().contains("SHULKER_BOX")) return;
 
-
-
-    @EventHandler
-    public void onInventoryMoveItem(InventoryMoveItemEvent event) {
-        List<Player> closeInventories = new ArrayList<>();
-        for (Player p : ShulkerPacksContinued.openshulkers.keySet()) {
-            if (ShulkerPacksContinued.openshulkers.get(p).equals(event.getItem())) {
-                closeInventories.add(p);
-            }
-        }
-        for (Player p : closeInventories) {
-            if (event.getInitiator().getLocation() != null && event.getInitiator().getLocation().getWorld() == p.getWorld()) {
-                if (event.getInitiator().getLocation().distance(p.getLocation()) < 6) {
-                    p.closeInventory();
+        if (event.getAction() == Action.RIGHT_CLICK_AIR) {
+            event.setCancelled(true);
+            openShulker(player, item, null, -1);
+        } else if (event.getAction() == Action.RIGHT_CLICK_BLOCK && event.getClickedBlock() != null) {
+            if (!(event.getClickedBlock().getState() instanceof Container container)) return;
+            Inventory containerInv = container.getInventory();
+            int slot = getExactSlot(item, containerInv);
+            if (slot != -1) {
+                String key = generateSessionKey(container, slot);
+                if (isLocked(key)) {
+                    player.sendMessage(ChatColor.RED + "Someone is already editing this shulker.");
+                    return;
                 }
+                event.setCancelled(true);
+                lock(key, player);
+                openShulker(player, item, container, slot);
             }
         }
     }
 
-    /*
-    Opens the shulker if its not in a weird inventory, then saves it
-     */
+    private void openShulker(Player player, ItemStack item, Container container, int slot) {
+        if (!(item.getItemMeta() instanceof BlockStateMeta meta)) return;
+        if (!(meta.getBlockState() instanceof ShulkerBox shulker)) return;
+
+        Inventory inv = Bukkit.createInventory(null, 27, getShulkerTitle(item));
+        inv.setContents(shulker.getInventory().getContents());
+
+        player.openInventory(inv);
+        player.playSound(player.getLocation(), Sound.BLOCK_SHULKER_BOX_OPEN, plugin.volume, 1);
+        soloSessions.put(player, item);
+
+        // Store key only if it's in a container
+        if (container != null && slot != -1) {
+            lockedKeys.put(player, generateSessionKey(container, slot));
+        }
+    }
+
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
-        if (event.isCancelled()) return;
-
         Player player = (Player) event.getWhoClicked();
-        // Prevent saving to an item that no longer exists in inventory
-        if (!isShulkerStillValid(player)) {
-            player.sendMessage(ChatColor.RED + "Shulker was moved or taken. Closing to prevent item duplication.");
+        if (!player.hasPermission("shantek.shulkerpacks.use")) return;
+
+        ItemStack clicked = event.getCurrentItem();
+
+        // Prevent moving the shulker being edited
+        if (clicked != null && clicked.equals(soloSessions.get(player))) {
             event.setCancelled(true);
-            player.closeInventory();
+            player.sendMessage(ChatColor.RED + "You can't move a shulker you're editing.");
             return;
         }
 
-        if (checkIfOpen(event.getCurrentItem())) { // Trying to move an open shulker
-            if (event.getClick() != ClickType.RIGHT) {
-                event.setCancelled(true);
-                return;
+        // Prevent moving a shulker that is locked by someone else
+        if (clicked != null && clicked.getType().toString().contains("SHULKER_BOX")) {
+            Inventory clickedInv = event.getClickedInventory();
+            if (clickedInv != null && clickedInv.getHolder() instanceof Container container) {
+                int slot = getExactSlot(clicked, clickedInv);
+                if (slot != -1) {
+                    String key = generateSessionKey(container, slot);
+                    if (isLocked(key) && !key.equals(lockedKeys.get(player))) {
+                        event.setCancelled(true);
+                        player.sendMessage(ChatColor.RED + "That shulker is currently locked by another player.");
+                        return;
+                    }
+                }
             }
         }
 
-        if (event.getClickedInventory() != null && event.getWhoClicked() instanceof Player) {
+        // Open shulker in container via right-click
+        if (event.getClick() == ClickType.RIGHT && clicked != null &&
+                clicked.getType().toString().contains("SHULKER_BOX") &&
+                clicked.getAmount() == 1 &&
+                event.getClickedInventory() != null &&
+                !(event.getClickedInventory().getHolder() instanceof Player)) {
 
-            if (event.getCurrentItem() != null && ShulkerPacksContinued.openshulkers.containsKey(player) &&
-                    event.getCurrentItem().equals(ShulkerPacksContinued.openshulkers.get(player))) {
-                event.setCancelled(true);
-                return;
-            }
+            Inventory containerInv = event.getClickedInventory();
+            if (containerInv.getHolder() instanceof Container container) {
+                int slot = getExactSlot(clicked, containerInv);
+                if (slot != -1) {
+                    String key = generateSessionKey(container, slot);
+                    if (isLocked(key)) {
+                        event.setCancelled(true);
+                        player.sendMessage(ChatColor.RED + "Someone is already editing this shulker.");
+                        return;
+                    }
 
-            InventoryType type = event.getClickedInventory().getType();
-            String typeStr = type.toString();
-
-            if (type == InventoryType.CHEST && (!main.canopeninchests || !player.hasPermission("shantek.shulkerpacks.chests"))) {
-                return;
-            }
-
-            if (typeStr.equals("WORKBENCH") || typeStr.equals("ANVIL") || typeStr.equals("BEACON") || typeStr.equals("MERCHANT") ||
-                    typeStr.equals("ENCHANTING") || typeStr.equals("GRINDSTONE") || typeStr.equals("CARTOGRAPHY") ||
-                    typeStr.equals("LOOM") || typeStr.equals("STONECUTTER")) {
-                return;
-            }
-
-            if (type == InventoryType.CRAFTING && event.getRawSlot() >= 1 && event.getRawSlot() <= 4) {
-                return;
-            }
-
-            if (event.getClickedInventory() == player.getInventory() &&
-                    (!main.canopenininventory || !player.hasPermission("shantek.shulkerpacks.inventory"))) {
-                return;
-            }
-
-            if (event.getSlotType() == InventoryType.SlotType.RESULT) {
-                return;
-            }
-
-            if (event.getClickedInventory().getHolder() != null &&
-                    event.getClickedInventory().getHolder().getClass().toString().endsWith(".CraftBarrel") &&
-                    !main.canopeninbarrels) {
-                return;
-            }
-
-            if (!main.canopeninenderchest && type == InventoryType.ENDER_CHEST) {
-                return;
-            }
-
-            for (String str : main.blacklist) {
-                if (ChatColor.stripColor(player.getOpenInventory().getTitle())
-                        .contains(ChatColor.stripColor(ChatColor.translateAlternateColorCodes('&', str)))) {
-                    return;
+                    event.setCancelled(true); // prevent normal right-click behavior
+                    lock(key, player);
+                    openShulker(player, clicked, container, slot);
                 }
             }
-
-            // If shift-click opening is disabled or the user is shift-clicking, allow interaction
-            if (!main.shiftclicktoopen || event.isShiftClick()) {
-                boolean wasCancelled = event.isCancelled();
-                event.setCancelled(true);
-                if (event.isRightClick() && openInventoryIfShulker(event.getCurrentItem(), player)) {
-                    main.fromhand.remove(player);
-                    return;
-                }
-                event.setCancelled(wasCancelled);
-            }
-
-            // Schedule a save to ensure consistency on slot updates
-            Bukkit.getServer().getScheduler().scheduleSyncDelayedTask(main, () -> {
-                if (!saveShulker(player, event.getView().getTitle())) {
-                    event.setCancelled(true);
-                }
-            }, 1);
         }
     }
 
-    // Deals with multiple people opening the same shulker
-    private static boolean checkIfOpen(ItemStack shulker) {
-        for (ItemStack i : ShulkerPacksContinued.openshulkers.values()) {
-            if (i.equals(shulker)) {
-                return true;
+
+    @EventHandler
+    public void onInventoryDrag(InventoryDragEvent event) {
+        Player player = (Player) event.getWhoClicked();
+        if (!player.hasPermission("shantek.shulkerpacks.use")) return;
+
+        for (ItemStack item : event.getNewItems().values()) {
+            if (item.equals(soloSessions.getOrDefault(player, null))) {
+                event.setCancelled(true);
+                player.sendMessage(ChatColor.RED + "You can't drag a shulker you're editing.");
             }
         }
-        return false;
     }
 
-    /*
-    Saves the shulker if its open, then removes the current open shulker from the player data
-     */
+    @EventHandler
+    public void onInventoryMoveItem(InventoryMoveItemEvent event) {
+        Inventory source = event.getSource();
+        for (Map.Entry<Player, String> entry : lockedKeys.entrySet()) {
+            Player locker = entry.getKey();
+            String[] parts = entry.getValue().split(":");
+            if (parts.length != 5) continue;
+            World world = Bukkit.getWorld(parts[0]);
+            int x = Integer.parseInt(parts[1]);
+            int y = Integer.parseInt(parts[2]);
+            int z = Integer.parseInt(parts[3]);
+
+            if (source.getLocation() != null && source.getLocation().getBlockX() == x &&
+                    source.getLocation().getBlockY() == y &&
+                    source.getLocation().getBlockZ() == z &&
+                    source.getLocation().getWorld().equals(world)) {
+                event.setCancelled(true);
+            }
+        }
+    }
+
     @EventHandler
     public void onInventoryClose(InventoryCloseEvent event) {
-        if (event.getPlayer() instanceof Player) {
-            Player player = (Player) event.getPlayer();
-            if (saveShulker(player, player.getOpenInventory().getTitle())) {
-                player.playSound(player.getLocation(), Sound.BLOCK_SHULKER_BOX_CLOSE, main.volume, 1);
-                if (main.openpreviousinv) {
-                    openPreviousInventory(player);
-                }
-            }
-            ShulkerPacksContinued.openshulkers.remove(player);
-        }
-    }
+        Player player = (Player) event.getPlayer();
 
+        if (!soloSessions.containsKey(player)) return;
 
-    private void openPreviousInventory(Player player) {
-        InventoryType type = main.opencontainer.get(player).getType();
-        if (type != InventoryType.CRAFTING && type != InventoryType.SHULKER_BOX) {
-            Bukkit.getServer().getScheduler().scheduleSyncDelayedTask(main, new Runnable() {
-                @Override
-                public void run() {
-                    player.openInventory(main.opencontainer.get(player));
-                    main.opencontainer.remove(player);
-                }
-            }, 1);
-        }
-    }
+        ItemStack item = soloSessions.remove(player);
+        if (!(item.getItemMeta() instanceof BlockStateMeta meta)) return;
+        if (!(meta.getBlockState() instanceof ShulkerBox shulker)) return;
 
+        Inventory inv = player.getOpenInventory().getTopInventory();
+        shulker.getInventory().setContents(inv.getContents());
+        meta.setBlockState(shulker);
+        item.setItemMeta(meta);
 
-    /*
-    Opens the shulker if the air was clicked with one
-     */
-    @EventHandler
-    public void onClickAir(PlayerInteractEvent event) {
-        Player player = event.getPlayer();
-        if (main.canopeninair && (event.getClickedBlock() == null || event.getClickedBlock().getType() == Material.AIR)) {
-            if ((!main.shiftclicktoopen || player.isSneaking())) {
-                if (event.getAction() == Action.RIGHT_CLICK_AIR) {
-                     if (main.canopeninair && player.hasPermission("shantek.shulkerpacks.air")) {
-                         ItemStack item = event.getItem();
-                         openInventoryIfShulker(item, event.getPlayer());
-                         main.fromhand.put(player, true);
-                     }
+        if (lockedKeys.containsKey(player)) {
+            String key = lockedKeys.remove(player);
+            String[] parts = key.split(":");
+            World world = Bukkit.getWorld(parts[0]);
+            int x = Integer.parseInt(parts[1]);
+            int y = Integer.parseInt(parts[2]);
+            int z = Integer.parseInt(parts[3]);
+            int slot = Integer.parseInt(parts[4]);
+
+            if (world != null) {
+                Location loc = new Location(world, x, y, z);
+                if (loc.getBlock().getState() instanceof Container container) {
+                    container.getInventory().setItem(slot, item);
+                    container.update();
                 }
             }
         }
+
+        player.playSound(player.getLocation(), Sound.BLOCK_SHULKER_BOX_CLOSE, plugin.volume, 1);
     }
 
-    @EventHandler
-    public void onShulkerPlace(BlockPlaceEvent event) {
-        if (event.getBlockPlaced().getType().toString().contains("SHULKER_BOX")) {
-            if (!main.canplaceshulker) {
-                event.setCancelled(true);
-            }
+    private boolean isLocked(String key) {
+        return lockedKeys.containsValue(key);
+    }
+
+    private void lock(String key, Player player) {
+        lockedKeys.put(player, key);
+    }
+
+    private String generateSessionKey(Container container, int slot) {
+        Location loc = container.getLocation();
+        return loc.getWorld().getName() + ":" + loc.getBlockX() + ":" + loc.getBlockY() + ":" + loc.getBlockZ() + ":" + slot;
+    }
+
+    private int getExactSlot(ItemStack target, Inventory inventory) {
+        for (int i = 0; i < inventory.getSize(); i++) {
+            ItemStack current = inventory.getItem(i);
+            if (current != null && current.equals(target)) return i;
         }
+        return -1;
     }
 
-    @EventHandler
-    public void onPlayerHit(EntityDamageByEntityEvent event) {
-        if (event.getDamager() instanceof Player && event.getEntity() instanceof Player) {
-            main.setPvpTimer((Player) event.getDamager());
-            main.setPvpTimer((Player) event.getEntity());
+    private String getShulkerTitle(ItemStack item) {
+        if (item.getItemMeta() != null && item.getItemMeta().hasDisplayName()) {
+            return item.getItemMeta().getDisplayName();
         }
+        return ChatColor.DARK_PURPLE + "Shulker Box";
     }
-
-    @EventHandler
-    public void onPlayerShoot(ProjectileHitEvent event) {
-        if (event.getHitEntity() instanceof Player && event.getEntity().getShooter() instanceof Player) {
-            main.setPvpTimer((Player) event.getEntity().getShooter());
-            main.setPvpTimer((Player) event.getHitEntity());
-        }
-    }
-
-    /*
-    Saves the shulker data in the itemmeta
-     */
-    public boolean saveShulker(Player player, String title) {
-        try {
-            if (!ShulkerPacksContinued.openshulkers.containsKey(player)) return false;
-
-            if (!isShulkerStillValid(player)) {
-                player.sendMessage(ChatColor.RED + "Shulker was moved or taken. Closing to prevent item duplication.");
-                player.closeInventory();
-                return false;
-            }
-
-            ItemStack original = ShulkerPacksContinued.openshulkers.get(player);
-            if (!title.equals(main.defaultname) &&
-                    (!original.hasItemMeta() || !original.getItemMeta().hasDisplayName() ||
-                            !original.getItemMeta().getDisplayName().equals(title))) {
-                return false;
-            }
-
-            BlockStateMeta meta = (BlockStateMeta) original.getItemMeta();
-            ShulkerBox shulker = (ShulkerBox) meta.getBlockState();
-            shulker.getInventory().setContents(main.openinventories.get(player).getContents());
-            meta.setBlockState(shulker);
-            original.setItemMeta(meta);
-            updateAllInventories(original);
-            return true;
-
-        } catch (Exception e) {
-            ShulkerPacksContinued.openshulkers.remove(player);
-            player.closeInventory();
-            Bukkit.getLogger().warning("Failed to save shulker for " + player.getName() + ": " + e.getMessage());
-            return false;
-        }
-    }
-
-
-    private void updateAllInventories(ItemStack item) {
-        for (Player p : ShulkerPacksContinued.openshulkers.keySet()) {
-            if (ShulkerPacksContinued.openshulkers.get(p).equals(item)) {
-                BlockStateMeta meta = (BlockStateMeta) item.getItemMeta();
-                ShulkerBox shulker = (ShulkerBox) meta.getBlockState();
-                p.getOpenInventory().getTopInventory().setContents(shulker.getInventory().getContents());
-                p.updateInventory();
-            }
-        }
-    }
-
-    /*
-    Opens the shulker inventory with the contents of the shulker
-     */
-    public boolean openInventoryIfShulker(ItemStack item, Player player) {
-        if (player.hasPermission("shantek.shulkerpacks.use")) {
-            if (item != null) {
-                if (item.getAmount() == 1 && item.getType().toString().contains("SHULKER")) {
-
-                    if (main.getPvpTimer(player)) {
-                        player.sendMessage(main.prefix + ChatColor.RED + "You cannot open shulkerboxes in combat!");
-                        return false;
-                    }
-
-                    if (item.getItemMeta() instanceof BlockStateMeta) {
-                        BlockStateMeta meta = (BlockStateMeta) item.getItemMeta();
-                        if (meta != null && meta.getBlockState() instanceof ShulkerBox) {
-                            ShulkerBox shulker = (ShulkerBox) meta.getBlockState();
-                            Inventory inv;
-                            if (meta.hasDisplayName()) {
-                                inv = Bukkit.createInventory(new ShulkerHolder(), InventoryType.SHULKER_BOX, meta.getDisplayName());
-                            } else {
-                                inv = Bukkit.createInventory(new ShulkerHolder(), InventoryType.SHULKER_BOX, main.defaultname);
-                            }
-                            inv.setContents(shulker.getInventory().getContents());
-
-                            main.opencontainer.put(player, player.getOpenInventory().getTopInventory());
-
-                            Bukkit.getServer().getScheduler().scheduleSyncDelayedTask(main, new Runnable() {
-                                @Override
-                                public void run() {
-                                    player.openInventory(inv);
-                                    player.playSound(player.getLocation(), Sound.BLOCK_SHULKER_BOX_OPEN, main.volume, 1);
-                                    ShulkerPacksContinued.openshulkers.put(player, item);
-                                    main.openinventories.put(player, player.getOpenInventory().getTopInventory());
-                                }
-                            }, 1);
-                            return true;
-                        }
-                    }
-                }
-            }
-        }
-        return false;
-    }
-
-    void checkIfValid() {
-        Bukkit.getScheduler().scheduleSyncRepeatingTask(main, new Runnable() {
-            @Override
-            public void run() {
-                for (Player p : ShulkerPacksContinued.openshulkers.keySet()) {
-                    ItemStack openShulker = ShulkerPacksContinued.openshulkers.get(p);
-
-                    // If the open shulker is now air, close the GUI
-                    if (openShulker.getType() == Material.AIR) {
-                        p.closeInventory();
-                        continue;
-                    }
-
-                    // If player is too far from their original container, close the GUI
-                    if (main.opencontainer.containsKey(p)) {
-                        Inventory container = main.opencontainer.get(p);
-                        if (container != null && container.getLocation() != null) {
-                            Location containerLoc = container.getLocation();
-                            if (containerLoc.getWorld() == p.getWorld() &&
-                                    containerLoc.distance(p.getLocation()) > 6) {
-                                p.closeInventory();
-                            }
-                        }
-                    }
-                }
-            }
-        }, 1L, 1L);
-    }
-
-    private boolean isShulkerStillValid(Player player) {
-        if (!ShulkerPacksContinued.openshulkers.containsKey(player)) return false;
-
-        ItemStack openShulker = ShulkerPacksContinued.openshulkers.get(player);
-        if (openShulker == null || openShulker.getType() == Material.AIR) {
-            return false;
-        }
-
-        for (ItemStack item : player.getInventory().getContents()) {
-            if (item != null && item.equals(openShulker)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
 }

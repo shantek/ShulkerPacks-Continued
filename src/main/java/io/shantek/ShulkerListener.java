@@ -186,14 +186,23 @@ public class ShulkerListener implements Listener {
             if (world != null) {
                 Location loc = new Location(world, x, y, z);
                 if (loc.getBlock().getState() instanceof Container container) {
-                    container.getInventory().setItem(slot, item);
-                    container.update();
+                    Inventory containerInv = container.getInventory();
+                    ItemStack currentItem = containerInv.getItem(slot);
+
+                    // ✅ Confirm the shulker is still there
+                    if (currentItem != null && currentItem.isSimilar(item)) {
+                        containerInv.setItem(slot, item);
+                        container.update();
+                    } else {
+                        player.sendMessage(ChatColor.RED + "The shulker was moved during editing. Changes were not saved.");
+                    }
                 }
             }
         }
 
         player.playSound(player.getLocation(), Sound.BLOCK_SHULKER_BOX_CLOSE, plugin.volume, 1);
     }
+
 
     private boolean isLocked(String key) {
         return lockedKeys.containsValue(key);
